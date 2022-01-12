@@ -1,0 +1,67 @@
+version: '3.7'
+
+services:
+  demo_zookeeper:
+    image: wurstmeister/zookeeper:latest
+    container_name: demo_zookeeper
+    ports:
+      - "2182:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - gateway
+  
+  demo_kafka:
+    image: wurstmeister/kafka:latest
+    container_name: demo_kafka
+    depends_on:
+      - demo_zookeeper
+    ports:
+      - "9093:9092"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${DOCKER_HOST_IP:-54.169.240.227}:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092
+      KAFKA_ZOOKEEPER_CONNECT: demo_zookeeper:2181
+      KAFKA_CREATE_TOPICS: "send-messsage:1:1"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    networks:
+      - gateway
+  
+  producer:
+    build:
+      context: .
+      dockerfile: ./build/Dockerfile
+      args:
+        SERVICE_NAME: 'producer'
+        CMD_PATH: 'cmd/producer'
+    volumes:
+      - .:/go/src/producer
+    depends_on:
+      - demo_kafka
+    restart: always
+    networks:
+      - gateway
+    env_file:
+     - ./.env
+
+  consumer:
+    build:
+      context: .
+      dockerfile: ./build/Dockerfile
+      args:
+        SERVICE_NAME: 'consumer'
+        CMD_PATH: 'cmd/consumer'
+    volumes:
+      - .:/go/src/consumer
+    depends_on:
+      - demo_kafka
+      - producer
+    restart: always
+    networks:
+      - gateway
+    env_file:
+     - ./.env
+
+networks: 
+  gateway:
+    external: true
